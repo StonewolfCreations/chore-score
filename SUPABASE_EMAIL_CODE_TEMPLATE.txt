@@ -1,0 +1,23 @@
+CHORE SCORE — SUPABASE EMAIL CODE TEMPLATE
+
+In Supabase:
+Authentication -> Email Templates -> Magic Link
+
+The template must contain {{ .Token }} instead of {{ .ConfirmationURL }}.
+
+A minimal working body is:
+
+<h2>Chore Score sign-in code</h2>
+<p>Enter this code in Chore Score:</p>
+<p style="font-size:32px;font-weight:bold;letter-spacing:4px">{{ .Token }}</p>
+<p>You can close this email after copying the code.</p>
+
+Save the template.
+
+WHY:
+The code is entered inside the installed Home Screen PWA. This ensures Supabase stores
+the authenticated session in the PWA's own storage instead of authenticating a separate
+Safari window.
+
+After the first successful code login, use "Set / change password" in Chore Score.
+Future sign-ins can then use email + password without sending another email.

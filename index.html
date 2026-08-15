@@ -309,6 +309,29 @@
     font-size:.82rem;
     line-height:1.35;
   }
+  .cloud-divider{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    margin:14px 0 8px;
+    color:var(--muted);
+    font-size:.76rem;
+    font-weight:700;
+    text-transform:uppercase;
+    letter-spacing:.04em;
+  }
+  .cloud-divider::before,
+  .cloud-divider::after{
+    content:"";
+    height:1px;
+    background:var(--line);
+    flex:1;
+  }
+  .cloud-code{
+    margin-top:8px;
+    letter-spacing:.12em;
+    font-weight:750;
+  }
 
   .high-score-celebration{
     position:fixed;
@@ -324,16 +347,20 @@
   .high-score-banner{
     position:relative;
     z-index:2;
-    padding:18px 24px;
-    border-radius:18px;
-    background:#17202a;
+    width:100%;
+    padding:24px 16px;
     color:white;
+    font-family:"Comic Sans MS","Marker Felt","Segoe Print",cursive;
     font-weight:900;
-    font-size:clamp(1.6rem, 7vw, 2.8rem);
-    letter-spacing:.04em;
+    font-size:clamp(2.5rem, 12vw, 5.5rem);
+    line-height:.95;
+    letter-spacing:.03em;
     text-align:center;
-    box-shadow:0 12px 40px rgba(0,0,0,.28);
-    animation:highScorePop 1.6s ease forwards;
+    text-shadow:
+      0 4px 0 #ef476f,
+      0 8px 0 #8b5cf6,
+      0 12px 24px rgba(0,0,0,.35);
+    animation:highScorePop 1.65s ease forwards;
   }
 
   .confetti{
@@ -347,11 +374,12 @@
   }
 
   @keyframes highScorePop{
-    0%{transform:scale(.55) rotate(-4deg); opacity:0}
-    18%{transform:scale(1.12) rotate(2deg); opacity:1}
-    32%{transform:scale(1) rotate(0)}
-    78%{transform:scale(1); opacity:1}
-    100%{transform:scale(.92); opacity:0}
+    0%{transform:scale(.25) rotate(-10deg); opacity:0}
+    16%{transform:scale(1.18) rotate(4deg); opacity:1}
+    28%{transform:scale(.96) rotate(-2deg)}
+    40%{transform:scale(1.06) rotate(1deg)}
+    68%{transform:scale(1) rotate(0); opacity:1}
+    100%{transform:scale(1.25) rotate(0); opacity:0}
   }
 
   @keyframes confettiFall{
@@ -403,16 +431,34 @@
         <div class="cloud-title">Cloud Backup</div>
 
         <div id="cloudSignedOut">
-          <p class="cloud-copy">Sign in by email to back up this checklist and restore it if browser data is cleared.</p>
-          <input class="cloud-email" id="cloudEmail" type="email" inputmode="email" autocomplete="email" placeholder="Email address" />
-          <button class="cloud-btn primary" id="sendMagicLinkBtn">Send sign-in link</button>
+          <p class="cloud-copy">Sign in inside Chore Score so the session stays with the installed app.</p>
+
+          <input class="cloud-email" id="cloudEmail" type="email" inputmode="email" autocomplete="username" placeholder="Email address" />
+          <input class="cloud-email" id="cloudPassword" type="password" autocomplete="current-password" placeholder="Password" />
+          <button class="cloud-btn primary" id="passwordSignInBtn">Sign in</button>
+
+          <div class="cloud-divider"><span>First sign-in / recovery</span></div>
+
+          <button class="cloud-btn" id="sendOtpBtn">Send one-time code</button>
+
+          <div id="otpEntry" hidden>
+            <input class="cloud-email cloud-code" id="cloudOtp" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="Email code" />
+            <button class="cloud-btn primary" id="verifyOtpBtn">Verify code</button>
+          </div>
         </div>
 
         <div id="cloudSignedIn" hidden>
           <div class="cloud-copy">Signed in as</div>
           <div class="cloud-user" id="cloudUserEmail"></div>
           <button class="cloud-btn primary" id="syncNowBtn">Sync now</button>
-          <button class="cloud-btn" id="signOutBtn">Sign out</button>
+
+          <div class="cloud-divider"><span>Password</span></div>
+          <p class="cloud-copy">Set a password once so future sign-ins do not require an email.</p>
+          <input class="cloud-email" id="newCloudPassword" type="password" autocomplete="new-password" placeholder="New password" />
+          <input class="cloud-email" id="confirmCloudPassword" type="password" autocomplete="new-password" placeholder="Confirm new password" />
+          <button class="cloud-btn" id="setPasswordBtn">Set / change password</button>
+
+          <button class="cloud-btn" id="signOutBtn">Sign out on this device</button>
         </div>
 
         <div class="auth-message" id="authMessage"></div>
@@ -426,9 +472,7 @@
     </div>
   </aside>
 
-  <div class="high-score-celebration" id="highScoreCelebration" hidden>
-    <div class="high-score-banner">NEW HIGH SCORE!</div>
-  </div>
+  <div class="high-score-celebration" id="highScoreCelebration" hidden></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.111.0"></script>
 <script>
@@ -834,6 +878,7 @@ let cloudUser = null;
 let cloudReady = false;
 let cloudSyncTimer = null;
 let cloudSyncInFlight = false;
+let highScoreCelebrationTimer = null;
 
 function localDateKey(date = new Date()) {
   const y = date.getFullYear();
@@ -983,23 +1028,37 @@ function highScore() {
 
 function celebrateHighScore() {
   const wrap = document.getElementById("highScoreCelebration");
-  wrap.querySelectorAll(".confetti").forEach(el => el.remove());
-  wrap.hidden = false;
+
+  if (highScoreCelebrationTimer) {
+    window.clearTimeout(highScoreCelebrationTimer);
+    highScoreCelebrationTimer = null;
+  }
+
+  // Recreate the banner every time so the text animation always restarts.
+  wrap.replaceChildren();
+
+  const banner = document.createElement("div");
+  banner.className = "high-score-banner";
+  banner.textContent = "NEW HIGH SCORE!";
+  wrap.appendChild(banner);
 
   const colors = ["#ffd166", "#ef476f", "#06d6a0", "#118ab2", "#8b5cf6", "#ffffff"];
-  for (let i = 0; i < 36; i++) {
+  for (let i = 0; i < 54; i++) {
     const piece = document.createElement("div");
     piece.className = "confetti";
     piece.style.left = `${Math.random() * 100}%`;
     piece.style.background = colors[i % colors.length];
-    piece.style.animationDelay = `${Math.random() * 0.35}s`;
-    piece.style.animationDuration = `${1.25 + Math.random() * 0.9}s`;
+    piece.style.animationDelay = `${Math.random() * 0.25}s`;
+    piece.style.animationDuration = `${1.25 + Math.random() * 0.8}s`;
     wrap.appendChild(piece);
   }
 
-  window.setTimeout(() => {
+  wrap.hidden = false;
+
+  highScoreCelebrationTimer = window.setTimeout(() => {
     wrap.hidden = true;
-    wrap.querySelectorAll(".confetti").forEach(el => el.remove());
+    wrap.replaceChildren();
+    highScoreCelebrationTimer = null;
   }, 2100);
 }
 
@@ -1212,35 +1271,143 @@ async function handleCloudSession(session) {
   await syncWithCloud();
 }
 
-async function sendMagicLink() {
-  if (!cloudClient) {
-    setAuthMessage("Cloud library is unavailable. Check the internet connection and reload.");
-    return;
-  }
-
+function authEmail() {
   const input = document.getElementById("cloudEmail");
-  const email = (input && input.value ? input.value : "").trim();
+  return (input && input.value ? input.value : "").trim();
+}
 
-  if (!email) {
-    setAuthMessage("Enter an email address first.");
+async function signInWithPassword() {
+  if (!cloudClient) {
+    setAuthMessage("Cloud backup is unavailable. Reload while online.");
     return;
   }
 
-  setAuthMessage("Sending sign-in link…");
+  const email = authEmail();
+  const passwordInput = document.getElementById("cloudPassword");
+  const password = passwordInput && passwordInput.value ? passwordInput.value : "";
+
+  if (!email || !password) {
+    setAuthMessage("Enter both email and password.");
+    return;
+  }
+
+  setAuthMessage("Signing in…");
+
+  const { error } = await cloudClient.auth.signInWithPassword({
+    email,
+    password
+  });
+
+  if (error) {
+    setAuthMessage(error.message || "Sign-in failed.");
+    return;
+  }
+
+  if (passwordInput) passwordInput.value = "";
+  setAuthMessage("");
+}
+
+async function sendOtpCode() {
+  if (!cloudClient) {
+    setAuthMessage("Cloud backup is unavailable. Reload while online.");
+    return;
+  }
+
+  const email = authEmail();
+  if (!email) {
+    setAuthMessage("Enter the email address first.");
+    return;
+  }
+
+  setAuthMessage("Sending one-time code…");
 
   const { error } = await cloudClient.auth.signInWithOtp({
     email,
     options: {
-      emailRedirectTo: APP_URL
+      shouldCreateUser: true
     }
   });
 
   if (error) {
-    setAuthMessage(error.message || "Could not send the sign-in link.");
+    if (error.code === "over_email_send_rate_limit" || error.status === 429) {
+      setAuthMessage("Email limit reached. Do not keep retrying; wait for the Supabase cooldown, then request one code.");
+    } else {
+      setAuthMessage(error.message || "Could not send the one-time code.");
+    }
     return;
   }
 
-  setAuthMessage("Sign-in link sent. Open the email on this iPhone and tap the link.");
+  const otpEntry = document.getElementById("otpEntry");
+  if (otpEntry) otpEntry.hidden = false;
+  setAuthMessage("Code sent. Enter the code from the email here without leaving Chore Score.");
+}
+
+async function verifyOtpCode() {
+  if (!cloudClient) return;
+
+  const email = authEmail();
+  const tokenInput = document.getElementById("cloudOtp");
+  const token = (tokenInput && tokenInput.value ? tokenInput.value : "").replace(/\s+/g, "");
+
+  if (!email || !token) {
+    setAuthMessage("Enter the email address and the code from the email.");
+    return;
+  }
+
+  setAuthMessage("Verifying code…");
+
+  const { error } = await cloudClient.auth.verifyOtp({
+    email,
+    token,
+    type: "email"
+  });
+
+  if (error) {
+    setAuthMessage(error.message || "The code could not be verified.");
+    return;
+  }
+
+  if (tokenInput) tokenInput.value = "";
+  const otpEntry = document.getElementById("otpEntry");
+  if (otpEntry) otpEntry.hidden = true;
+  setAuthMessage("");
+}
+
+async function setCloudPassword() {
+  if (!cloudClient || !cloudUser) {
+    setAuthMessage("Sign in before setting a password.");
+    return;
+  }
+
+  const first = document.getElementById("newCloudPassword");
+  const second = document.getElementById("confirmCloudPassword");
+  const password = first && first.value ? first.value : "";
+  const confirmPassword = second && second.value ? second.value : "";
+
+  if (!password || !confirmPassword) {
+    setAuthMessage("Enter the new password twice.");
+    return;
+  }
+
+  if (password !== confirmPassword) {
+    setAuthMessage("The two password entries do not match.");
+    return;
+  }
+
+  setAuthMessage("Saving password…");
+
+  const { error } = await cloudClient.auth.updateUser({
+    password
+  });
+
+  if (error) {
+    setAuthMessage(error.message || "Could not set the password.");
+    return;
+  }
+
+  first.value = "";
+  second.value = "";
+  setAuthMessage("Password saved. Future sign-ins can use email + password without sending an email.");
 }
 
 async function initCloud() {
@@ -1258,7 +1425,7 @@ async function initCloud() {
       auth: {
         autoRefreshToken: true,
         persistSession: true,
-        detectSessionInUrl: true
+        detectSessionInUrl: false
       }
     }
   );
@@ -1287,18 +1454,21 @@ function closeDrawer() {
 
 document.getElementById("menuBtn").addEventListener("click", openDrawer);
 
-document.getElementById("sendMagicLinkBtn").addEventListener("click", sendMagicLink);
+document.getElementById("passwordSignInBtn").addEventListener("click", signInWithPassword);
+document.getElementById("sendOtpBtn").addEventListener("click", sendOtpCode);
+document.getElementById("verifyOtpBtn").addEventListener("click", verifyOtpCode);
+document.getElementById("setPasswordBtn").addEventListener("click", setCloudPassword);
 document.getElementById("syncNowBtn").addEventListener("click", () => syncWithCloud());
 document.getElementById("signOutBtn").addEventListener("click", async () => {
   if (!cloudClient) return;
-  const { error } = await cloudClient.auth.signOut();
+  const { error } = await cloudClient.auth.signOut({ scope: "local" });
   if (error) {
     setAuthMessage(error.message || "Sign out failed.");
   } else {
     cloudUser = null;
     updateCloudAuthUI();
     setSyncStatus("Cloud: signed out");
-    setAuthMessage("Signed out. Local checklist data remains on this device.");
+    setAuthMessage("Signed out on this device. Local checklist data remains here.");
   }
 });
 document.getElementById("closeBtn").addEventListener("click", closeDrawer);

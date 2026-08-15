@@ -1,4 +1,4 @@
-const CACHE_NAME = "chore-score-v2-cloud";
+const CACHE_NAME = "chore-score-v4-pwa-auth";
 const APP_FILES = [
   "./",
   "./index.html",
@@ -31,9 +31,25 @@ self.addEventListener("fetch", event => {
 
   const url = new URL(event.request.url);
 
-  // Cache only Chore Score's own static files. Never cache Supabase API/auth responses.
+  // Never intercept Supabase or other cross-origin requests.
   if (url.origin !== self.location.origin) return;
 
+  // Navigation uses network-first so a newly deployed app is not trapped
+  // behind an old cached index.html. Offline falls back to the cached app.
+  if (event.request.mode === "navigate") {
+    event.respondWith(
+      fetch(event.request)
+        .then(response => {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put("./index.html", copy));
+          return response;
+        })
+        .catch(() => caches.match("./index.html"))
+    );
+    return;
+  }
+
+  // Static same-origin assets remain cache-first.
   event.respondWith(
     caches.match(event.request).then(cached => {
       if (cached) return cached;
@@ -41,7 +57,7 @@ self.addEventListener("fetch", event => {
         const copy = response.clone();
         caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy));
         return response;
-      }).catch(() => caches.match("./index.html"));
+      });
     })
   );
 });
