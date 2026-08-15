@@ -309,29 +309,6 @@
     font-size:.82rem;
     line-height:1.35;
   }
-  .cloud-divider{
-    display:flex;
-    align-items:center;
-    gap:10px;
-    margin:14px 0 8px;
-    color:var(--muted);
-    font-size:.76rem;
-    font-weight:700;
-    text-transform:uppercase;
-    letter-spacing:.04em;
-  }
-  .cloud-divider::before,
-  .cloud-divider::after{
-    content:"";
-    height:1px;
-    background:var(--line);
-    flex:1;
-  }
-  .cloud-code{
-    margin-top:8px;
-    letter-spacing:.12em;
-    font-weight:750;
-  }
 
   .high-score-celebration{
     position:fixed;
@@ -431,33 +408,24 @@
         <div class="cloud-title">Cloud Backup</div>
 
         <div id="cloudSignedOut">
-          <p class="cloud-copy">Sign in inside Chore Score so the session stays with the installed app.</p>
+          <p class="cloud-copy">Use one Chore Score account. No email link is required.</p>
 
-          <input class="cloud-email" id="cloudEmail" type="email" inputmode="email" autocomplete="username" placeholder="Email address" />
-          <input class="cloud-email" id="cloudPassword" type="password" autocomplete="current-password" placeholder="Password" />
+          <input class="cloud-email" id="cloudEmail" type="email"
+                 inputmode="email" autocomplete="username"
+                 placeholder="Email address" />
+
+          <input class="cloud-email" id="cloudPassword" type="password"
+                 autocomplete="current-password"
+                 placeholder="Password" />
+
           <button class="cloud-btn primary" id="passwordSignInBtn">Sign in</button>
-
-          <div class="cloud-divider"><span>First sign-in / recovery</span></div>
-
-          <button class="cloud-btn" id="sendOtpBtn">Send one-time code</button>
-
-          <div id="otpEntry" hidden>
-            <input class="cloud-email cloud-code" id="cloudOtp" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="Email code" />
-            <button class="cloud-btn primary" id="verifyOtpBtn">Verify code</button>
-          </div>
+          <button class="cloud-btn" id="createAccountBtn">Create account</button>
         </div>
 
         <div id="cloudSignedIn" hidden>
           <div class="cloud-copy">Signed in as</div>
           <div class="cloud-user" id="cloudUserEmail"></div>
           <button class="cloud-btn primary" id="syncNowBtn">Sync now</button>
-
-          <div class="cloud-divider"><span>Password</span></div>
-          <p class="cloud-copy">Set a password once so future sign-ins do not require an email.</p>
-          <input class="cloud-email" id="newCloudPassword" type="password" autocomplete="new-password" placeholder="New password" />
-          <input class="cloud-email" id="confirmCloudPassword" type="password" autocomplete="new-password" placeholder="Confirm new password" />
-          <button class="cloud-btn" id="setPasswordBtn">Set / change password</button>
-
           <button class="cloud-btn" id="signOutBtn">Sign out on this device</button>
         </div>
 
@@ -1276,6 +1244,53 @@ function authEmail() {
   return (input && input.value ? input.value : "").trim();
 }
 
+function authPassword() {
+  const input = document.getElementById("cloudPassword");
+  return input && input.value ? input.value : "";
+}
+
+function clearPasswordField() {
+  const input = document.getElementById("cloudPassword");
+  if (input) input.value = "";
+}
+
+async function createAccount() {
+  if (!cloudClient) {
+    setAuthMessage("Cloud backup is unavailable. Reload while online.");
+    return;
+  }
+
+  const email = authEmail();
+  const password = authPassword();
+
+  if (!email || !password) {
+    setAuthMessage("Enter both email and password.");
+    return;
+  }
+
+  setAuthMessage("Creating account…");
+
+  const { data, error } = await cloudClient.auth.signUp({
+    email,
+    password
+  });
+
+  if (error) {
+    setAuthMessage(error.message || "Account creation failed.");
+    return;
+  }
+
+  if (!data || !data.session) {
+    setAuthMessage(
+      "Supabase did not sign this account in. Turn OFF Authentication → Sign In / Providers → Email → Confirm Email, then delete this test user in Authentication → Users and create the account again."
+    );
+    return;
+  }
+
+  clearPasswordField();
+  setAuthMessage("Account created and signed in.");
+}
+
 async function signInWithPassword() {
   if (!cloudClient) {
     setAuthMessage("Cloud backup is unavailable. Reload while online.");
@@ -1283,8 +1298,7 @@ async function signInWithPassword() {
   }
 
   const email = authEmail();
-  const passwordInput = document.getElementById("cloudPassword");
-  const password = passwordInput && passwordInput.value ? passwordInput.value : "";
+  const password = authPassword();
 
   if (!email || !password) {
     setAuthMessage("Enter both email and password.");
@@ -1303,111 +1317,8 @@ async function signInWithPassword() {
     return;
   }
 
-  if (passwordInput) passwordInput.value = "";
+  clearPasswordField();
   setAuthMessage("");
-}
-
-async function sendOtpCode() {
-  if (!cloudClient) {
-    setAuthMessage("Cloud backup is unavailable. Reload while online.");
-    return;
-  }
-
-  const email = authEmail();
-  if (!email) {
-    setAuthMessage("Enter the email address first.");
-    return;
-  }
-
-  setAuthMessage("Sending one-time code…");
-
-  const { error } = await cloudClient.auth.signInWithOtp({
-    email,
-    options: {
-      shouldCreateUser: true
-    }
-  });
-
-  if (error) {
-    if (error.code === "over_email_send_rate_limit" || error.status === 429) {
-      setAuthMessage("Email limit reached. Do not keep retrying; wait for the Supabase cooldown, then request one code.");
-    } else {
-      setAuthMessage(error.message || "Could not send the one-time code.");
-    }
-    return;
-  }
-
-  const otpEntry = document.getElementById("otpEntry");
-  if (otpEntry) otpEntry.hidden = false;
-  setAuthMessage("Code sent. Enter the code from the email here without leaving Chore Score.");
-}
-
-async function verifyOtpCode() {
-  if (!cloudClient) return;
-
-  const email = authEmail();
-  const tokenInput = document.getElementById("cloudOtp");
-  const token = (tokenInput && tokenInput.value ? tokenInput.value : "").replace(/\s+/g, "");
-
-  if (!email || !token) {
-    setAuthMessage("Enter the email address and the code from the email.");
-    return;
-  }
-
-  setAuthMessage("Verifying code…");
-
-  const { error } = await cloudClient.auth.verifyOtp({
-    email,
-    token,
-    type: "email"
-  });
-
-  if (error) {
-    setAuthMessage(error.message || "The code could not be verified.");
-    return;
-  }
-
-  if (tokenInput) tokenInput.value = "";
-  const otpEntry = document.getElementById("otpEntry");
-  if (otpEntry) otpEntry.hidden = true;
-  setAuthMessage("");
-}
-
-async function setCloudPassword() {
-  if (!cloudClient || !cloudUser) {
-    setAuthMessage("Sign in before setting a password.");
-    return;
-  }
-
-  const first = document.getElementById("newCloudPassword");
-  const second = document.getElementById("confirmCloudPassword");
-  const password = first && first.value ? first.value : "";
-  const confirmPassword = second && second.value ? second.value : "";
-
-  if (!password || !confirmPassword) {
-    setAuthMessage("Enter the new password twice.");
-    return;
-  }
-
-  if (password !== confirmPassword) {
-    setAuthMessage("The two password entries do not match.");
-    return;
-  }
-
-  setAuthMessage("Saving password…");
-
-  const { error } = await cloudClient.auth.updateUser({
-    password
-  });
-
-  if (error) {
-    setAuthMessage(error.message || "Could not set the password.");
-    return;
-  }
-
-  first.value = "";
-  second.value = "";
-  setAuthMessage("Password saved. Future sign-ins can use email + password without sending an email.");
 }
 
 async function initCloud() {
@@ -1455,9 +1366,7 @@ function closeDrawer() {
 document.getElementById("menuBtn").addEventListener("click", openDrawer);
 
 document.getElementById("passwordSignInBtn").addEventListener("click", signInWithPassword);
-document.getElementById("sendOtpBtn").addEventListener("click", sendOtpCode);
-document.getElementById("verifyOtpBtn").addEventListener("click", verifyOtpCode);
-document.getElementById("setPasswordBtn").addEventListener("click", setCloudPassword);
+document.getElementById("createAccountBtn").addEventListener("click", createAccount);
 document.getElementById("syncNowBtn").addEventListener("click", () => syncWithCloud());
 document.getElementById("signOutBtn").addEventListener("click", async () => {
   if (!cloudClient) return;

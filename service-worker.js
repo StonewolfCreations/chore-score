@@ -1,4 +1,4 @@
-const CACHE_NAME = "chore-score-v4-pwa-auth";
+const CACHE_NAME = "chore-score-v5-password-auth";
 const APP_FILES = [
   "./",
   "./index.html",
