@@ -1,0 +1,1020 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Chore Score</title>
+<meta name="theme-color" content="#2457d6" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-title" content="Chore Score" />
+<link rel="manifest" href="./manifest.webmanifest" />
+<link rel="apple-touch-icon" href="./icons/icon-180.png" />
+<style>
+  :root{
+    --bg:#f4f6f8;
+    --card:#ffffff;
+    --text:#17202a;
+    --muted:#667085;
+    --line:#d9dee7;
+    --accent:#2457d6;
+    --accent-soft:#eaf0ff;
+    --done:#eef8f0;
+    --danger:#b42318;
+    --shadow:0 1px 4px rgba(16,24,40,.08);
+  }
+
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0;
+    font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    background:var(--bg);
+    color:var(--text);
+  }
+
+  button,input{font:inherit}
+
+  .topbar{
+    position:sticky;
+    top:0;
+    z-index:50;
+    display:grid;
+    grid-template-columns:48px 1fr 48px;
+    align-items:center;
+    min-height:72px;
+    padding:max(10px, env(safe-area-inset-top)) 12px 10px;
+    background:rgba(255,255,255,.96);
+    border-bottom:1px solid var(--line);
+    backdrop-filter:blur(10px);
+  }
+
+  .menu-btn{
+    width:42px;
+    height:42px;
+    border:0;
+    border-radius:10px;
+    background:transparent;
+    font-size:27px;
+    line-height:1;
+    cursor:pointer;
+  }
+
+  .score-wrap{text-align:center}
+  .score-label{
+    font-size:.8rem;
+    color:var(--muted);
+    font-weight:700;
+    letter-spacing:.05em;
+    text-transform:uppercase;
+  }
+  .score{
+    font-size:1.65rem;
+    line-height:1.1;
+    font-weight:800;
+  }
+  .date{
+    margin-top:2px;
+    color:var(--muted);
+    font-size:.78rem;
+  }
+
+  main{
+    max-width:760px;
+    margin:0 auto;
+    padding:14px 12px 80px;
+  }
+
+  .intro{
+    margin:0 0 12px;
+    padding:13px 14px;
+    background:var(--accent-soft);
+    border:1px solid #cdd9ff;
+    border-radius:12px;
+    color:#263b73;
+    font-size:.92rem;
+  }
+
+  .section{
+    margin:0 0 14px;
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:14px;
+    box-shadow:var(--shadow);
+    overflow:hidden;
+  }
+
+  .section-title{
+    margin:0;
+    padding:15px 16px;
+    font-size:1.05rem;
+    background:#fbfcfd;
+    border-bottom:1px solid var(--line);
+  }
+
+  .group-title{
+    margin:0;
+    padding:13px 16px 7px;
+    font-size:.85rem;
+    color:var(--muted);
+    text-transform:uppercase;
+    letter-spacing:.045em;
+  }
+
+  .task{
+    display:flex;
+    gap:12px;
+    align-items:flex-start;
+    padding:12px 16px;
+    border-top:1px solid #edf0f4;
+    cursor:pointer;
+    user-select:none;
+  }
+
+  .group-title + .task{border-top:0}
+
+  .task input{
+    width:23px;
+    height:23px;
+    margin:0;
+    flex:0 0 auto;
+    accent-color:var(--accent);
+  }
+
+  .task span{
+    flex:1;
+    font-size:1rem;
+    line-height:1.35;
+  }
+
+  .task.checked{
+    background:var(--done);
+  }
+
+  .task.checked span{
+    text-decoration:line-through;
+    color:var(--muted);
+  }
+
+  .drawer-backdrop{
+    position:fixed;
+    inset:0;
+    z-index:90;
+    background:rgba(15,23,42,.42);
+    display:none;
+  }
+  .drawer-backdrop.open{display:block}
+
+  .drawer{
+    position:fixed;
+    z-index:100;
+    inset:0 auto 0 0;
+    width:min(88vw,360px);
+    background:white;
+    transform:translateX(-102%);
+    transition:transform .2s ease;
+    box-shadow:8px 0 24px rgba(15,23,42,.18);
+    display:flex;
+    flex-direction:column;
+    padding-top:max(10px, env(safe-area-inset-top));
+  }
+  .drawer.open{transform:translateX(0)}
+
+  .drawer-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:14px 16px;
+    border-bottom:1px solid var(--line);
+  }
+  .drawer-header h2{
+    margin:0;
+    font-size:1.15rem;
+  }
+  .close-btn{
+    width:38px;
+    height:38px;
+    border:0;
+    border-radius:8px;
+    background:#f2f4f7;
+    font-size:22px;
+    cursor:pointer;
+  }
+
+  .drawer-content{
+    overflow:auto;
+    padding:14px 16px 28px;
+  }
+
+  .history-row{
+    display:flex;
+    justify-content:space-between;
+    gap:14px;
+    padding:11px 0;
+    border-bottom:1px solid #edf0f4;
+  }
+  .history-date{font-weight:650}
+  .history-score{font-weight:800}
+
+  .empty{
+    color:var(--muted);
+    font-size:.92rem;
+    padding:10px 0 18px;
+  }
+
+  .menu-actions{
+    display:grid;
+    gap:9px;
+    margin-top:18px;
+  }
+  .action-btn{
+    border:1px solid var(--line);
+    background:#fff;
+    border-radius:10px;
+    padding:11px 12px;
+    cursor:pointer;
+    text-align:left;
+  }
+  .action-btn.danger{
+    color:var(--danger);
+  }
+
+  .footer-note{
+    color:var(--muted);
+    font-size:.82rem;
+    text-align:center;
+    padding:8px 12px 0;
+  }
+
+  .high-score-celebration{
+    position:fixed;
+    inset:0;
+    z-index:200;
+    pointer-events:none;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    overflow:hidden;
+  }
+
+  .high-score-banner{
+    position:relative;
+    z-index:2;
+    padding:18px 24px;
+    border-radius:18px;
+    background:#17202a;
+    color:white;
+    font-weight:900;
+    font-size:clamp(1.6rem, 7vw, 2.8rem);
+    letter-spacing:.04em;
+    text-align:center;
+    box-shadow:0 12px 40px rgba(0,0,0,.28);
+    animation:highScorePop 1.6s ease forwards;
+  }
+
+  .confetti{
+    position:absolute;
+    top:-24px;
+    width:10px;
+    height:18px;
+    border-radius:2px;
+    opacity:.95;
+    animation:confettiFall 1.8s linear forwards;
+  }
+
+  @keyframes highScorePop{
+    0%{transform:scale(.55) rotate(-4deg); opacity:0}
+    18%{transform:scale(1.12) rotate(2deg); opacity:1}
+    32%{transform:scale(1) rotate(0)}
+    78%{transform:scale(1); opacity:1}
+    100%{transform:scale(.92); opacity:0}
+  }
+
+  @keyframes confettiFall{
+    0%{transform:translateY(-10vh) rotate(0deg); opacity:1}
+    100%{transform:translateY(115vh) rotate(720deg); opacity:0}
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    .high-score-banner{animation:none}
+    .confetti{display:none}
+  }
+
+  @media (min-width:700px){
+    .task{padding:11px 18px}
+    .section-title{padding-left:18px}
+    .group-title{padding-left:18px}
+  }
+</style>
+</head>
+<body>
+  <header class="topbar">
+    <button class="menu-btn" id="menuBtn" aria-label="Open menu">☰</button>
+    <div class="score-wrap">
+      <div class="score-label">Today's Score</div>
+      <div class="score"><span id="score">0</span> / <span id="totalTasks">254</span></div>
+      <div class="date" id="todayDate"></div>
+      <div class="date">High Score: <span id="highScore">0</span></div>
+    </div>
+    <div></div>
+  </header>
+
+  <main>
+    <div class="intro">
+      Each checked task earns 1 point. Check a task when the whole listed batch is finished.
+    </div>
+    <div id="checklist"></div>
+    <div class="footer-note">Progress is stored only on this device/browser.</div>
+  </main>
+
+  <div class="drawer-backdrop" id="backdrop"></div>
+  <aside class="drawer" id="drawer" aria-label="Menu">
+    <div class="drawer-header">
+      <h2>Score History</h2>
+      <button class="close-btn" id="closeBtn" aria-label="Close menu">×</button>
+    </div>
+    <div class="drawer-content">
+      <div id="history"></div>
+      <div class="menu-actions">
+        <button class="action-btn" id="clearTodayBtn">Clear today's checks</button>
+        <button class="action-btn danger" id="clearHistoryBtn">Clear score history</button>
+      </div>
+    </div>
+  </aside>
+
+  <div class="high-score-celebration" id="highScoreCelebration" hidden>
+    <div class="high-score-banner">NEW HIGH SCORE!</div>
+  </div>
+
+<script>
+const choreSections = [
+  {
+    title: "Daily Whole-House Reset",
+    groups: [
+      ["Trash", [
+        "Collect trash from living room",
+        "Collect trash from Bedroom 1",
+        "Collect trash from Bedroom 2",
+        "Collect trash from bathroom",
+        "Collect trash from kitchen",
+        "Empty full trash cans",
+        "Take trash outside",
+        "Replace trash bags"
+      ]],
+      ["Dishes", [
+        "Collect dishes from living room",
+        "Collect dishes from Bedroom 1",
+        "Collect dishes from Bedroom 2",
+        "Collect dishes from bathroom",
+        "Collect dishes from kitchen/table",
+        "Put leftover food away",
+        "Scrape/rinse dirty dishes",
+        "Wash all cups",
+        "Wash all plates",
+        "Wash all bowls",
+        "Wash all silverware",
+        "Wash all pots and pans",
+        "Wash all cooking utensils",
+        "Wash all food-storage containers",
+        "Dry dishes",
+        "Put cups away",
+        "Put plates and bowls away",
+        "Put silverware away",
+        "Put pots and pans away",
+        "Put utensils and containers away",
+        "Rinse and wipe sink"
+      ]]
+    ]
+  },
+  {
+    title: "Kitchen",
+    groups: [
+      ["Reset", [
+        "Collect dishes",
+        "Throw away trash",
+        "Put refrigerated food away",
+        "Put pantry food away",
+        "Put cooking ingredients away",
+        "Put cooking utensils away",
+        "Put small appliances where they belong",
+        "Clear kitchen table",
+        "Wipe kitchen table",
+        "Clear counters",
+        "Put counter items where they belong",
+        "Wipe counters",
+        "Clear stove",
+        "Wipe stove",
+        "Wipe sink and faucet"
+      ]],
+      ["Floor", [
+        "Pick up objects from kitchen floor",
+        "Check for rabbit messes",
+        "Clean rabbit messes",
+        "Sweep kitchen",
+        "Mop kitchen"
+      ]],
+      ["Trash", [
+        "Empty kitchen trash",
+        "Replace trash bag",
+        "Take trash outside"
+      ]]
+    ]
+  },
+  {
+    title: "Living Room",
+    groups: [
+      ["Reset", [
+        "Collect dishes",
+        "Collect trash",
+        "Collect dirty clothes",
+        "Put shoes away",
+        "Put blankets away",
+        "Put toys away",
+        "Put books and papers away",
+        "Put electronics and remotes where they belong",
+        "Put other misplaced items away",
+        "Straighten couch cushions and pillows",
+        "Clear coffee table",
+        "Put coffee-table items where they belong",
+        "Wipe coffee table",
+        "Clear other tables and shelves",
+        "Put those items where they belong",
+        "Wipe other tables and shelves"
+      ]],
+      ["Floor", [
+        "Pick up objects from floor",
+        "Check for rabbit messes",
+        "Clean rabbit messes",
+        "Sweep or vacuum living room"
+      ]]
+    ]
+  },
+  {
+    title: "Bedroom 1",
+    groups: [
+      ["Reset", [
+        "Collect dishes",
+        "Collect trash",
+        "Put dirty clothes in hamper",
+        "Put clean clothes away",
+        "Put shoes away",
+        "Put toys and personal items away",
+        "Put books and papers away",
+        "Clear bedside surfaces",
+        "Put bedside items away",
+        "Clear dresser surfaces",
+        "Put dresser items away",
+        "Make bed"
+      ]],
+      ["Floor", [
+        "Pick up objects from floor",
+        "Check for rabbit messes if rabbits entered",
+        "Clean rabbit messes",
+        "Sweep or vacuum bedroom"
+      ]]
+    ]
+  },
+  {
+    title: "Bedroom 2",
+    groups: [
+      ["Reset", [
+        "Collect dishes",
+        "Collect trash",
+        "Put dirty clothes in hamper",
+        "Put clean clothes away",
+        "Put shoes away",
+        "Put toys and personal items away",
+        "Put books and papers away",
+        "Clear bedside surfaces",
+        "Put bedside items away",
+        "Clear dresser surfaces",
+        "Put dresser items away",
+        "Make bed"
+      ]],
+      ["Floor", [
+        "Pick up objects from floor",
+        "Check for rabbit messes if rabbits entered",
+        "Clean rabbit messes",
+        "Sweep or vacuum bedroom"
+      ]]
+    ]
+  },
+  {
+    title: "Bathroom",
+    groups: [
+      ["Reset", [
+        "Collect dirty clothes",
+        "Collect dirty towels",
+        "Throw away trash",
+        "Put toiletries away",
+        "Clear sink and counter",
+        "Wipe counter",
+        "Clean sink and faucet",
+        "Clean mirror",
+        "Clean toilet",
+        "Put shower products where they belong",
+        "Remove hair from drain",
+        "Rinse tub or shower",
+        "Put out clean towels"
+      ]],
+      ["Floor", [
+        "Pick up objects from bathroom floor",
+        "Check for rabbit messes if rabbits entered",
+        "Clean rabbit messes",
+        "Sweep bathroom",
+        "Mop bathroom"
+      ]],
+      ["Trash", [
+        "Empty bathroom trash",
+        "Replace trash bag"
+      ]]
+    ]
+  },
+  {
+    title: "Laundry",
+    groups: [
+      ["Collect", [
+        "Collect Bedroom 1 laundry",
+        "Collect Bedroom 2 laundry",
+        "Collect bathroom laundry",
+        "Collect living-room laundry",
+        "Collect kitchen towels",
+        "Bring laundry to washing area"
+      ]],
+      ["Prepare", [
+        "Sort laundry into loads",
+        "Check pockets",
+        "Separate special-care items"
+      ]],
+      ["Wash / Dry", [
+        "Start a load in washer",
+        "Move finished wash load to dryer",
+        "Remove finished dry load",
+        "Start next load if needed"
+      ]],
+      ["Fold", [
+        "Fold all shirts",
+        "Fold all pants and shorts",
+        "Fold all pajamas",
+        "Fold all underwear",
+        "Match and fold all socks",
+        "Fold all bathroom towels",
+        "Fold all kitchen towels"
+      ]],
+      ["Put Away", [
+        "Put Person 1 clothes away",
+        "Put Person 2 clothes away",
+        "Put Person 3 clothes away",
+        "Put Person 4 clothes away",
+        "Put Person 5 clothes away",
+        "Put Person 6 clothes away",
+        "Put bathroom towels away",
+        "Put kitchen towels away",
+        "Put laundry baskets away"
+      ]]
+    ]
+  },
+  {
+    title: "Rabbit Care",
+    groups: [
+      ["Daily Care", [
+        "Check water and refill if needed",
+        "Check food and refill if needed",
+        "Check hay and refill if needed",
+        "Check litter area",
+        "Remove heavily soiled litter",
+        "Add fresh litter as needed"
+      ]],
+      ["After Rabbits Have Been Out", [
+        "Check living room for rabbit messes",
+        "Check kitchen for rabbit messes",
+        "Check bedrooms they entered for rabbit messes",
+        "Check bathroom if they entered",
+        "Pick up visible droppings",
+        "Sweep up loose hay",
+        "Pick up chewed debris",
+        "Clean urine spots",
+        "Check cords, baseboards, and furniture for chewing",
+        "Return rabbit barriers to place"
+      ]]
+    ]
+  },
+  {
+    title: "Weekly Kitchen",
+    groups: [
+      ["Weekly", [
+        "Check refrigerator for expired food",
+        "Throw away expired food",
+        "Wipe refrigerator shelves and drawers",
+        "Wipe refrigerator doors and handles",
+        "Clean microwave inside",
+        "Clean microwave outside",
+        "Wipe cabinet fronts and handles",
+        "Clean outside of refrigerator",
+        "Clean outside of stove and oven",
+        "Clean under kitchen table",
+        "Clean behind and under movable kitchen items"
+      ]]
+    ]
+  },
+  {
+    title: "Weekly Living Room",
+    groups: [
+      ["Weekly", [
+        "Dust tables",
+        "Dust shelves",
+        "Dust TV and entertainment area",
+        "Wipe frequently touched electronics",
+        "Vacuum under couch",
+        "Vacuum under chairs",
+        "Vacuum room edges and corners",
+        "Clean under couch cushions",
+        "Wash couch blankets if needed",
+        "Wipe door handles and light switches"
+      ]]
+    ]
+  },
+  {
+    title: "Weekly Bedrooms",
+    groups: [
+      ["Bedroom 1", [
+        "Change Bedroom 1 sheets",
+        "Wash Bedroom 1 bedding",
+        "Dust Bedroom 1 bedside surfaces",
+        "Dust Bedroom 1 dresser and shelves",
+        "Vacuum under Bedroom 1 bed",
+        "Vacuum Bedroom 1 edges and corners",
+        "Wipe Bedroom 1 door handles and light switches"
+      ]],
+      ["Bedroom 2", [
+        "Change Bedroom 2 sheets",
+        "Wash Bedroom 2 bedding",
+        "Dust Bedroom 2 bedside surfaces",
+        "Dust Bedroom 2 dresser and shelves",
+        "Vacuum under Bedroom 2 bed",
+        "Vacuum Bedroom 2 edges and corners",
+        "Wipe Bedroom 2 door handles and light switches"
+      ]]
+    ]
+  },
+  {
+    title: "Weekly Bathroom",
+    groups: [
+      ["Weekly", [
+        "Scrub tub or shower",
+        "Clean shower walls and fixtures",
+        "Deep-clean toilet",
+        "Wipe cabinet fronts and handles",
+        "Wash bath mats",
+        "Wash towels",
+        "Clean behind toilet",
+        "Wipe bathroom baseboards",
+        "Wipe door handle and light switch"
+      ]]
+    ]
+  },
+  {
+    title: "Weekly Rabbit Area",
+    groups: [
+      ["Weekly", [
+        "Empty litter box completely",
+        "Wash litter box",
+        "Refill litter box",
+        "Wash food dishes",
+        "Wash water dishes or bottles",
+        "Sweep rabbit area",
+        "Mop rabbit area",
+        "Clean loose hay around rabbit area",
+        "Wipe nearby walls and baseboards",
+        "Check rabbit barriers",
+        "Check cords and cord protectors",
+        "Check nearby furniture for chewing"
+      ]]
+    ]
+  },
+  {
+    title: "Monthly / Occasional",
+    groups: [
+      ["Kitchen", [
+        "Clean refrigerator thoroughly",
+        "Clean freezer",
+        "Check pantry for expired food",
+        "Wipe pantry shelves",
+        "Clean cabinet interiors",
+        "Wipe kitchen baseboards",
+        "Clean under refrigerator if accessible",
+        "Clean under stove if accessible"
+      ]],
+      ["Living Room", [
+        "Wipe living-room baseboards",
+        "Clean behind furniture",
+        "Wash throw blankets",
+        "Clean couch thoroughly",
+        "Clean living-room windows",
+        "Wipe living-room window sills"
+      ]],
+      ["Bedrooms", [
+        "Wipe bedroom baseboards",
+        "Clean bedroom windows",
+        "Clear trash from closets",
+        "Wash comforters and blankets",
+        "Clean fully underneath beds"
+      ]],
+      ["Bathroom", [
+        "Wash shower curtain if applicable",
+        "Clean exhaust vent cover",
+        "Clean bathroom window",
+        "Clean under bathroom storage"
+      ]],
+      ["Whole House", [
+        "Remove cobwebs",
+        "Clean interior windows",
+        "Wipe window sills",
+        "Wipe visible marks from walls",
+        "Clean behind large furniture",
+        "Check cleaning supplies and restock"
+      ]]
+    ]
+  }
+];
+
+const STORAGE_KEY = "adhdChoreApp_v1";
+
+function localDateKey(date = new Date()) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function prettyDate(key) {
+  const [y,m,d] = key.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, {
+    weekday:"short", month:"short", day:"numeric", year:"numeric"
+  });
+}
+
+function loadState() {
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {
+      activeDate: localDateKey(),
+      checked: {},
+      history: {},
+      highScore: 10
+    };
+  } catch {
+    return { activeDate: localDateKey(), checked: {}, history: {}, highScore: 10 };
+  }
+}
+
+let state = loadState();
+
+function normalizeHighScore() {
+  const historyScores = Object.values(state.history || {}).map(Number);
+  const historicalMax = historyScores.length ? Math.max(...historyScores) : 0;
+  const currentScore = scoreFromChecked(state.checked || {});
+  state.highScore = Math.max(10, Number(state.highScore) || 0, historicalMax, currentScore);
+  saveState();
+}
+
+function scoreFromChecked(checkedObj) {
+  return Object.values(checkedObj || {}).filter(Boolean).length;
+}
+
+function saveState() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+function rollDayIfNeeded() {
+  const today = localDateKey();
+  if (state.activeDate !== today) {
+    const previousScore = scoreFromChecked(state.checked);
+    state.history[state.activeDate] = previousScore;
+    state.activeDate = today;
+    state.checked = {};
+    saveState();
+  }
+}
+
+function taskId(sectionIndex, groupIndex, taskIndex) {
+  return `s${sectionIndex}-g${groupIndex}-t${taskIndex}`;
+}
+
+function renderChecklist() {
+  const root = document.getElementById("checklist");
+  root.innerHTML = "";
+
+  choreSections.forEach((section, sIdx) => {
+    const card = document.createElement("section");
+    card.className = "section";
+
+    const h2 = document.createElement("h2");
+    h2.className = "section-title";
+    h2.textContent = section.title;
+    card.appendChild(h2);
+
+    section.groups.forEach(([groupTitle, tasks], gIdx) => {
+      const h3 = document.createElement("h3");
+      h3.className = "group-title";
+      h3.textContent = groupTitle;
+      card.appendChild(h3);
+
+      tasks.forEach((task, tIdx) => {
+        const id = taskId(sIdx, gIdx, tIdx);
+        const label = document.createElement("label");
+        label.className = "task" + (state.checked[id] ? " checked" : "");
+
+        const box = document.createElement("input");
+        box.type = "checkbox";
+        box.checked = !!state.checked[id];
+
+        const text = document.createElement("span");
+        text.textContent = task;
+
+        box.addEventListener("change", () => {
+          const recordBefore = highScore();
+
+          if (box.checked) {
+            state.checked[id] = true;
+          } else {
+            delete state.checked[id];
+          }
+
+          const scoreAfter = scoreFromChecked(state.checked);
+          const isNewHighScore = box.checked && scoreAfter > recordBefore;
+
+          if (isNewHighScore) {
+            state.highScore = scoreAfter;
+          }
+
+          label.classList.toggle("checked", box.checked);
+          saveState();
+          updateScore();
+
+          if (isNewHighScore) {
+            celebrateHighScore();
+          }
+        });
+
+        label.appendChild(box);
+        label.appendChild(text);
+        card.appendChild(label);
+      });
+    });
+
+    root.appendChild(card);
+  });
+}
+
+function totalTaskCount() {
+  return choreSections.reduce((total, section) =>
+    total + section.groups.reduce((groupTotal, [, tasks]) =>
+      groupTotal + tasks.length, 0), 0);
+}
+
+function highScore() {
+  return Math.max(10, Number(state.highScore) || 10);
+}
+
+function celebrateHighScore() {
+  const wrap = document.getElementById("highScoreCelebration");
+  wrap.querySelectorAll(".confetti").forEach(el => el.remove());
+  wrap.hidden = false;
+
+  const colors = ["#ffd166", "#ef476f", "#06d6a0", "#118ab2", "#8b5cf6", "#ffffff"];
+  for (let i = 0; i < 36; i++) {
+    const piece = document.createElement("div");
+    piece.className = "confetti";
+    piece.style.left = `${Math.random() * 100}%`;
+    piece.style.background = colors[i % colors.length];
+    piece.style.animationDelay = `${Math.random() * 0.35}s`;
+    piece.style.animationDuration = `${1.25 + Math.random() * 0.9}s`;
+    wrap.appendChild(piece);
+  }
+
+  window.setTimeout(() => {
+    wrap.hidden = true;
+    wrap.querySelectorAll(".confetti").forEach(el => el.remove());
+  }, 2100);
+}
+
+function updateScore() {
+  document.getElementById("score").textContent = scoreFromChecked(state.checked);
+  document.getElementById("totalTasks").textContent = totalTaskCount();
+  document.getElementById("highScore").textContent = highScore();
+}
+
+function renderDate() {
+  document.getElementById("todayDate").textContent =
+    new Date().toLocaleDateString(undefined, {
+      weekday:"long", month:"short", day:"numeric"
+    });
+}
+
+function renderHistory() {
+  const root = document.getElementById("history");
+  const items = Object.entries(state.history)
+    .sort((a,b) => b[0].localeCompare(a[0]));
+
+  if (!items.length) {
+    root.innerHTML = '<div class="empty">No previous daily scores yet.</div>';
+    return;
+  }
+
+  root.innerHTML = "";
+  items.forEach(([date, score]) => {
+    const row = document.createElement("div");
+    row.className = "history-row";
+
+    const d = document.createElement("div");
+    d.className = "history-date";
+    d.textContent = prettyDate(date);
+
+    const s = document.createElement("div");
+    s.className = "history-score";
+    s.textContent = score;
+
+    row.appendChild(d);
+    row.appendChild(s);
+    root.appendChild(row);
+  });
+}
+
+function openDrawer() {
+  renderHistory();
+  document.getElementById("drawer").classList.add("open");
+  document.getElementById("backdrop").classList.add("open");
+}
+
+function closeDrawer() {
+  document.getElementById("drawer").classList.remove("open");
+  document.getElementById("backdrop").classList.remove("open");
+}
+
+document.getElementById("menuBtn").addEventListener("click", openDrawer);
+document.getElementById("closeBtn").addEventListener("click", closeDrawer);
+document.getElementById("backdrop").addEventListener("click", closeDrawer);
+
+document.getElementById("clearTodayBtn").addEventListener("click", () => {
+  if (!confirm("Clear all of today's checks?")) return;
+  state.checked = {};
+  saveState();
+  renderChecklist();
+  updateScore();
+});
+
+document.getElementById("clearHistoryBtn").addEventListener("click", () => {
+  if (!confirm("Clear all saved score history?")) return;
+  state.history = {};
+  saveState();
+  renderHistory();
+  updateScore();
+});
+
+normalizeHighScore();
+rollDayIfNeeded();
+renderDate();
+renderChecklist();
+updateScore();
+
+// If the app stays open across midnight, roll over on the next interaction/focus.
+window.addEventListener("focus", () => {
+  const before = state.activeDate;
+  rollDayIfNeeded();
+  if (before !== state.activeDate) {
+    renderDate();
+    renderChecklist();
+    updateScore();
+  }
+});
+
+// Ask the browser to keep this origin's local data in persistent storage
+// when the platform supports that capability. This reduces automatic
+// eviction risk, but explicit browser/site-data clearing can still remove it.
+async function requestPersistentStorage() {
+  try {
+    if (navigator.storage && navigator.storage.persist) {
+      const granted = await navigator.storage.persist();
+      console.log("PERSISTENT_STORAGE=" + (granted ? "GRANTED" : "NOT_GRANTED"));
+    }
+  } catch (err) {
+    console.warn("Persistent storage request failed:", err);
+  }
+}
+
+// Register the service worker so the installed app can launch offline.
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", async () => {
+    try {
+      await navigator.serviceWorker.register("./service-worker.js");
+      console.log("SERVICE_WORKER=REGISTERED");
+    } catch (err) {
+      console.error("SERVICE_WORKER=FAILED", err);
+    }
+  });
+}
+
+requestPersistentStorage();
+</script>
+</body>
+</html>
