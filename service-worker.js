@@ -1,4 +1,4 @@
-const CACHE_NAME = "chore-score-v5-password-auth";
+const CACHE_NAME = "chore-score-v6-five-checks";
 const APP_FILES = [
   "./",
   "./index.html",

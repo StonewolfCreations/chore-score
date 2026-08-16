@@ -1,0 +1,21 @@
+CHORE SCORE — DAILY REPEAT RULE
+
+Every chore can be completed up to 5 times per calendar day.
+
+Scoring:
+- Each accepted completion = 1 point.
+- Maximum per task per day = 5 points.
+- 254 tasks × 5 = 1,270 maximum daily points.
+
+Cooldown:
+- A task cannot be checked again until at least 90 minutes after its previous accepted check.
+- The app displays N/5 today and the remaining lock time.
+- The lock is enforced from stored completion timestamps.
+
+Daily rollover:
+- Completion timestamps reset from the active checklist at the next local calendar day.
+- The completed day's total is stored in score history.
+
+Migration:
+- Existing legacy true/false checks are preserved as one completion for that task.
+- Existing history and high scores are preserved.

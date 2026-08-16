@@ -124,36 +124,84 @@
   .task{
     display:flex;
     gap:12px;
-    align-items:flex-start;
+    align-items:center;
     padding:12px 16px;
     border-top:1px solid #edf0f4;
-    cursor:pointer;
     user-select:none;
   }
 
   .group-title + .task{border-top:0}
 
-  .task input{
-    width:23px;
-    height:23px;
+  .task-check{
+    width:42px;
+    height:42px;
     margin:0;
-    flex:0 0 auto;
-    accent-color:var(--accent);
+    flex:0 0 42px;
+    border:2px solid var(--accent);
+    border-radius:12px;
+    background:white;
+    color:var(--accent);
+    font-size:1.35rem;
+    font-weight:900;
+    cursor:pointer;
   }
 
-  .task span{
+  .task-check:disabled{
+    cursor:not-allowed;
+    border-color:#c7ccd4;
+    color:#8b95a5;
+    background:#f2f4f7;
+  }
+
+  .task-check.ready{
+    background:var(--accent);
+    color:white;
+  }
+
+  .task-copy{
+    min-width:0;
     flex:1;
+  }
+
+  .task-name{
+    display:block;
     font-size:1rem;
     line-height:1.35;
   }
 
-  .task.checked{
+  .task-meta{
+    display:block;
+    margin-top:3px;
+    color:var(--muted);
+    font-size:.78rem;
+    line-height:1.25;
+  }
+
+  .task.has-completions{
     background:var(--done);
   }
 
-  .task.checked span{
-    text-decoration:line-through;
-    color:var(--muted);
+  .task.maxed{
+    background:#e6f6ea;
+  }
+
+  .task-progress{
+    display:flex;
+    gap:4px;
+    margin-top:6px;
+  }
+
+  .task-progress-dot{
+    width:8px;
+    height:8px;
+    border-radius:50%;
+    border:1px solid #aeb6c3;
+    background:white;
+  }
+
+  .task-progress-dot.filled{
+    border-color:var(--accent);
+    background:var(--accent);
   }
 
   .drawer-backdrop{
@@ -381,7 +429,7 @@
     <button class="menu-btn" id="menuBtn" aria-label="Open menu">☰</button>
     <div class="score-wrap">
       <div class="score-label">Today's Score</div>
-      <div class="score"><span id="score">0</span> / <span id="totalTasks">254</span></div>
+      <div class="score"><span id="score">0</span> / <span id="totalTasks">1270</span></div>
       <div class="date" id="todayDate"></div>
       <div class="date">High Score: <span id="highScore">0</span></div>
       <div class="sync-status" id="syncStatus">Cloud: signed out</div>
@@ -391,10 +439,10 @@
 
   <main>
     <div class="intro">
-      Each checked task earns 1 point. Check a task when the whole listed batch is finished.
+      Each completed task earns 1 point. Every task can score up to 5 times per day, with a 90-minute wait between checks.
     </div>
     <div id="checklist"></div>
-    <div class="footer-note">Progress is stored only on this device/browser.</div>
+    <div class="footer-note">Progress saves locally immediately and syncs to your Chore Score cloud account when signed in.</div>
   </main>
 
   <div class="drawer-backdrop" id="backdrop"></div>
@@ -848,6 +896,10 @@ let cloudSyncTimer = null;
 let cloudSyncInFlight = false;
 let highScoreCelebrationTimer = null;
 
+const MAX_CHECKS_PER_TASK = 5;
+const RECHECK_WAIT_MINUTES = 90;
+const RECHECK_WAIT_MS = RECHECK_WAIT_MINUTES * 60 * 1000;
+
 function localDateKey(date = new Date()) {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, "0");
@@ -878,6 +930,73 @@ function loadState() {
 
 let state = loadState();
 
+function completionCount(value) {
+  if (Array.isArray(value)) return Math.min(MAX_CHECKS_PER_TASK, value.length);
+  return value ? 1 : 0;
+}
+
+function legacyCompletionTimestamp(activeDate, modifiedAt) {
+  if (modifiedAt) {
+    const candidate = new Date(modifiedAt);
+    if (!Number.isNaN(candidate.getTime()) && localDateKey(candidate) === activeDate) {
+      return candidate.toISOString();
+    }
+  }
+
+  const [y, m, d] = String(activeDate || localDateKey()).split("-").map(Number);
+  return new Date(y, (m || 1) - 1, d || 1, 0, 0, 0, 0).toISOString();
+}
+
+function normalizeCompletionMap(checkedObj, activeDate, modifiedAt) {
+  const source = checkedObj && typeof checkedObj === "object" ? checkedObj : {};
+  const normalized = {};
+  let changed = false;
+
+  Object.entries(source).forEach(([id, value]) => {
+    if (Array.isArray(value)) {
+      const valid = value
+        .map(item => new Date(item))
+        .filter(date => !Number.isNaN(date.getTime()))
+        .map(date => date.toISOString())
+        .sort()
+        .slice(0, MAX_CHECKS_PER_TASK);
+
+      if (valid.length) normalized[id] = valid;
+
+      if (
+        valid.length !== value.length ||
+        valid.some((item, index) => item !== value[index])
+      ) {
+        changed = true;
+      }
+      return;
+    }
+
+    if (value) {
+      normalized[id] = [legacyCompletionTimestamp(activeDate, modifiedAt)];
+      changed = true;
+    } else if (value !== undefined) {
+      changed = true;
+    }
+  });
+
+  return { normalized, changed };
+}
+
+function normalizeCompletionState() {
+  const result = normalizeCompletionMap(
+    state.checked,
+    state.activeDate || localDateKey(),
+    state.modifiedAt
+  );
+
+  state.checked = result.normalized;
+
+  if (result.changed) {
+    saveState(false, false);
+  }
+}
+
 function normalizeHighScore() {
   const before = Number(state.highScore) || 0;
   const historyScores = Object.values(state.history || {}).map(Number);
@@ -890,7 +1009,8 @@ function normalizeHighScore() {
 }
 
 function scoreFromChecked(checkedObj) {
-  return Object.values(checkedObj || {}).filter(Boolean).length;
+  return Object.values(checkedObj || {})
+    .reduce((total, value) => total + completionCount(value), 0);
 }
 
 function saveState(markModified = true, scheduleSync = true) {
@@ -918,6 +1038,137 @@ function taskId(sectionIndex, groupIndex, taskIndex) {
   return `s${sectionIndex}-g${groupIndex}-t${taskIndex}`;
 }
 
+function taskCompletionTimes(id) {
+  const value = state.checked && state.checked[id];
+  if (!Array.isArray(value)) return [];
+  return value;
+}
+
+function taskEligibility(id, nowMs = Date.now()) {
+  const times = taskCompletionTimes(id);
+  const count = Math.min(MAX_CHECKS_PER_TASK, times.length);
+
+  if (count >= MAX_CHECKS_PER_TASK) {
+    return { allowed:false, count, remainingMs:0, maxed:true };
+  }
+
+  if (!count) {
+    return { allowed:true, count:0, remainingMs:0, maxed:false };
+  }
+
+  const lastMs = Date.parse(times[count - 1]);
+  if (!Number.isFinite(lastMs)) {
+    return { allowed:true, count, remainingMs:0, maxed:false };
+  }
+
+  const remainingMs = Math.max(0, RECHECK_WAIT_MS - (nowMs - lastMs));
+  return {
+    allowed: remainingMs === 0,
+    count,
+    remainingMs,
+    maxed:false
+  };
+}
+
+function formatRemainingTime(ms) {
+  const totalMinutes = Math.max(1, Math.ceil(ms / 60000));
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+
+  if (!hours) return `${minutes}m`;
+  if (!minutes) return `${hours}h`;
+  return `${hours}h ${minutes}m`;
+}
+
+function updateTaskRowStatus(row, id, nowMs = Date.now()) {
+  if (!row) return;
+
+  const status = taskEligibility(id, nowMs);
+  const button = row.querySelector(".task-check");
+  const meta = row.querySelector(".task-meta");
+  const dots = row.querySelectorAll(".task-progress-dot");
+
+  row.classList.toggle("has-completions", status.count > 0);
+  row.classList.toggle("maxed", status.maxed);
+
+  dots.forEach((dot, index) => {
+    dot.classList.toggle("filled", index < status.count);
+  });
+
+  if (button) {
+    button.disabled = !status.allowed;
+    button.classList.toggle("ready", status.allowed);
+    button.textContent = status.maxed ? "✓" : (status.allowed ? "+" : "⏱");
+
+    if (status.maxed) {
+      button.setAttribute("aria-label", "Maximum 5 checks reached for today");
+    } else if (status.allowed) {
+      button.setAttribute("aria-label", `Check this task. ${status.count} of 5 completed today.`);
+    } else {
+      button.setAttribute(
+        "aria-label",
+        `Task locked. Next check available in ${formatRemainingTime(status.remainingMs)}.`
+      );
+    }
+  }
+
+  if (meta) {
+    if (status.maxed) {
+      meta.textContent = "5/5 today · Complete for today";
+    } else if (status.allowed) {
+      meta.textContent = `${status.count}/5 today · Ready`;
+    } else {
+      meta.textContent =
+        `${status.count}/5 today · Next in ${formatRemainingTime(status.remainingMs)}`;
+    }
+  }
+}
+
+function refreshTaskAvailability() {
+  const nowMs = Date.now();
+  document.querySelectorAll(".task[data-task-id]").forEach(row => {
+    updateTaskRowStatus(row, row.dataset.taskId, nowMs);
+  });
+}
+
+function recordTaskCompletion(id, row) {
+  const beforeDate = state.activeDate;
+  rollDayIfNeeded();
+
+  if (beforeDate !== state.activeDate) {
+    renderDate();
+    renderChecklist();
+    updateScore();
+    row = document.querySelector(`.task[data-task-id="${id}"]`);
+  }
+
+  const status = taskEligibility(id);
+  if (!status.allowed) {
+    updateTaskRowStatus(row, id);
+    return;
+  }
+
+  const recordBefore = highScore();
+  const times = taskCompletionTimes(id).slice();
+  times.push(new Date().toISOString());
+  state.checked[id] = times.slice(0, MAX_CHECKS_PER_TASK);
+
+  const scoreAfter = scoreFromChecked(state.checked);
+  const isNewHighScore = scoreAfter > recordBefore;
+
+  if (isNewHighScore) {
+    state.highScore = scoreAfter;
+  }
+
+  saveState();
+  updateScore();
+  updateTaskRowStatus(row, id);
+
+  if (isNewHighScore) {
+    celebrateHighScore();
+  }
+}
+
 function renderChecklist() {
   const root = document.getElementById("checklist");
   root.innerHTML = "";
@@ -939,44 +1190,45 @@ function renderChecklist() {
 
       tasks.forEach((task, tIdx) => {
         const id = taskId(sIdx, gIdx, tIdx);
-        const label = document.createElement("label");
-        label.className = "task" + (state.checked[id] ? " checked" : "");
 
-        const box = document.createElement("input");
-        box.type = "checkbox";
-        box.checked = !!state.checked[id];
+        const row = document.createElement("div");
+        row.className = "task";
+        row.dataset.taskId = id;
 
-        const text = document.createElement("span");
-        text.textContent = task;
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "task-check";
+        button.addEventListener("click", () => recordTaskCompletion(id, row));
 
-        box.addEventListener("change", () => {
-          const recordBefore = highScore();
+        const copy = document.createElement("div");
+        copy.className = "task-copy";
 
-          if (box.checked) {
-            state.checked[id] = true;
-          } else {
-            delete state.checked[id];
-          }
+        const name = document.createElement("span");
+        name.className = "task-name";
+        name.textContent = task;
 
-          const scoreAfter = scoreFromChecked(state.checked);
-          const isNewHighScore = box.checked && scoreAfter > recordBefore;
+        const meta = document.createElement("span");
+        meta.className = "task-meta";
 
-          if (isNewHighScore) {
-            state.highScore = scoreAfter;
-          }
+        const progress = document.createElement("div");
+        progress.className = "task-progress";
+        progress.setAttribute("aria-hidden", "true");
 
-          label.classList.toggle("checked", box.checked);
-          saveState();
-          updateScore();
+        for (let i = 0; i < MAX_CHECKS_PER_TASK; i++) {
+          const dot = document.createElement("span");
+          dot.className = "task-progress-dot";
+          progress.appendChild(dot);
+        }
 
-          if (isNewHighScore) {
-            celebrateHighScore();
-          }
-        });
+        copy.appendChild(name);
+        copy.appendChild(meta);
+        copy.appendChild(progress);
 
-        label.appendChild(box);
-        label.appendChild(text);
-        card.appendChild(label);
+        row.appendChild(button);
+        row.appendChild(copy);
+        card.appendChild(row);
+
+        updateTaskRowStatus(row, id);
       });
     });
 
@@ -988,6 +1240,10 @@ function totalTaskCount() {
   return choreSections.reduce((total, section) =>
     total + section.groups.reduce((groupTotal, [, tasks]) =>
       groupTotal + tasks.length, 0), 0);
+}
+
+function totalDailyCapacity() {
+  return totalTaskCount() * MAX_CHECKS_PER_TASK;
 }
 
 function highScore() {
@@ -1032,7 +1288,7 @@ function celebrateHighScore() {
 
 function updateScore() {
   document.getElementById("score").textContent = scoreFromChecked(state.checked);
-  document.getElementById("totalTasks").textContent = totalTaskCount();
+  document.getElementById("totalTasks").textContent = totalDailyCapacity();
   document.getElementById("highScore").textContent = highScore();
 }
 
@@ -1132,6 +1388,7 @@ function applyCloudState(cloudState) {
     modifiedAt: cloudState.modifiedAt || null
   };
 
+  normalizeCompletionState();
   normalizeHighScore();
   saveState(false, false);
   rollDayIfNeeded();
@@ -1399,12 +1656,15 @@ document.getElementById("clearHistoryBtn").addEventListener("click", () => {
   updateScore();
 });
 
+normalizeCompletionState();
 normalizeHighScore();
 rollDayIfNeeded();
 renderDate();
 renderChecklist();
 updateScore();
 initCloud();
+
+window.setInterval(refreshTaskAvailability, 30000);
 
 window.addEventListener("online", () => {
   if (cloudUser) syncWithCloud();
@@ -1422,6 +1682,8 @@ window.addEventListener("focus", () => {
     renderDate();
     renderChecklist();
     updateScore();
+  } else {
+    refreshTaskAvailability();
   }
 });
 
